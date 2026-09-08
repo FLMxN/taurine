@@ -3,9 +3,10 @@
 #![feature(abi_x86_interrupt)]
 
 mod glucose;
-mod overdose;
+mod adrenaline;
+mod noradrenaline;
 
-use core::arch::asm;
+// use core::arch::asm;
 use core::panic::PanicInfo;
 use bootloader_api::info::{FrameBufferInfo, MemoryRegionKind, PixelFormat};
 use bootloader_api::{
@@ -13,6 +14,8 @@ use bootloader_api::{
     config::{BootloaderConfig, Mapping},
 };
 
+static BODY: [u8; 3] = [225, 250, 245];
+pub static mut LIFETIME: u64 = 0;
 const BOOTLOADER_CONFIG: BootloaderConfig = {
     let mut config = BootloaderConfig::new_default();
     config.mappings.physical_memory = Some(Mapping::Dynamic);
@@ -22,14 +25,15 @@ const BOOTLOADER_CONFIG: BootloaderConfig = {
 entry_point!(entry, config = &BOOTLOADER_CONFIG);
 
 fn entry(boot_info: &'static mut BootInfo) -> ! {
-	overdose::init_idt();
+	adrenaline::wake();
+	let mut conscious = 0i64;
 	let framebuffer = boot_info
 		.framebuffer
 		.take()
 		.expect("framebuffer unavailable");
 	let info = framebuffer.info();
 	let mut screen = FrameBufferWriter::new(framebuffer.into_buffer(), info);
-	screen.clear([225, 250, 245]);
+	screen.clear(BODY);
 	screen.write_text(32, 32, b"taurine v0.1.0 kernel by mephisto", [46, 247, 130]);
 	let usable_memory = memtotal(boot_info);
 	let memory_message = if usable_memory > 0 {
@@ -38,7 +42,10 @@ fn entry(boot_info: &'static mut BootInfo) -> ! {
 		&b"No usable memory found"[..]
 	};
 
+	noradrenaline::brace();
+
 	screen.write_text(32, 56, memory_message, [46, 247, 130]);
+	screen.write_text(info.width-128, 56, b"lifetime", [46, 247, 130]);
 
 	if usable_memory > 0 {
 		let (digits, first_digit) = u64_to_decimal(usable_memory);
@@ -47,7 +54,14 @@ fn entry(boot_info: &'static mut BootInfo) -> ! {
     }
 
 	loop {
-		core::hint::spin_loop();
+		unsafe {
+		if conscious != LIFETIME as i64 {
+			conscious = LIFETIME as i64;
+			let (digits, first_digit) = u64_to_decimal(conscious as u64);
+			screen.fill([info.width-128, info.width-128 + 8 * 12], [80, 80 + 16], BODY);
+			screen.write_text(info.width-128, 80, &digits[first_digit..], [46, 247, 130]);
+			}
+		}
 	}
 }
 
@@ -59,6 +73,14 @@ struct FrameBufferWriter {
 impl FrameBufferWriter {
 	fn new(buffer: &'static mut [u8], info: FrameBufferInfo) -> Self {
 		Self { buffer, info }
+	}
+
+	fn fill(&mut self, xx: [usize; 2], yy: [usize; 2], color: [u8; 3]) {
+		for y in yy[0]..yy[1] {
+			for x in xx[0]..xx[1] {
+				self.set_pixel(x, y, color);
+			}
+		}
 	}
 
 	fn clear(&mut self, color: [u8; 3]) {
@@ -175,9 +197,14 @@ fn u64_to_decimal(mut value: u64) -> ([u8; 20], usize) {
 	(digits, first_digit)
 }
 
+pub fn chill() {
+    unsafe {
+        LIFETIME += 1;
+    }
+}
 
 #[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
+fn panic(_info: &PanicInfo) -> ! {
 	// screen.clear([0, 0, 0]);
 	// screen.write_text(32, 32, b"kernel panic! halting...", [46, 247, 130]);
 	loop {
