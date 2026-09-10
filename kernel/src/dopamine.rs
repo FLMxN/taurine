@@ -5,18 +5,44 @@ use x86_64::instructions::interrupts;
 
 use crate::blinking;
 use crate::nicotine;
+use crate::CURSOR_LINE;
 
 static COMMAND: Mutex<String<32>> = Mutex::new(String::new());
+pub static LAST_COMMAND: Mutex<String<32>> = Mutex::new(String::new());
 static HELD_KEYS: Mutex<[bool; 128]> = Mutex::new([false; 128]);
+pub static PRINTABLE: Mutex<String<32>> = Mutex::new(String::new());
 
-pub fn snapshot() -> String<32> {
+pub fn snapshot() -> (String<80>, bool) {
 	interrupts::without_interrupts(|| {
 		let command = COMMAND.lock();
+		let last_command = LAST_COMMAND.lock();
 		let mut snapshot = String::new();
 		snapshot.push_str("% ").ok();
-		snapshot.push_str(command.as_str()).ok();
-		snapshot.push_str("_").ok();
-		snapshot
+		snapshot.push_str(if command.is_empty() {
+			last_command.as_str()
+		} else {
+			command.as_str()
+		}).ok();
+		let printable = PRINTABLE.lock();
+		if !printable.is_empty() {
+			snapshot = String::new();
+			snapshot.push_str("* ").ok();
+			snapshot.push_str(if command.is_empty() {
+				last_command.as_str()
+			} else {
+				command.as_str()
+			}).ok();
+			snapshot.push_str(" ---> ").ok();
+			snapshot.push_str(printable.as_str()).ok();
+			(snapshot, true)
+		} else {
+			if command.is_empty() && !last_command.is_empty() {
+				(String::new(), false)
+			} else {
+				(snapshot, false)
+			}
+		}
+		// snapshot.push_str("_").ok();
 	})
 }
 
@@ -122,6 +148,14 @@ fn articulate(byte: u8) -> [u8; 7] {
 		b'8' => [14, 17, 17, 14, 17, 17, 14], b'9' => [14, 17, 17, 15, 1, 1, 14],
 		b'.' => [0, 0, 0, 0, 0, 6, 6], b':' => [0, 6, 6, 0, 6, 6, 0],
 		b'%' => [24, 25, 2, 4, 8, 19, 3], b'_' => [0, 0, 0, 0, 0, 0, 31],
+		b'-' => [0, 0, 0, 31, 0, 0, 0], b'=' => [0, 0, 31, 0, 31, 0, 0],
+		b'>' => [16, 8, 4, 2, 4, 8, 16], b'<' => [1, 2, 4, 8, 4, 2, 1],
+		b'[' => [14, 8, 8, 8, 8, 8, 14], b']' => [28, 4, 4, 4, 4, 4, 28],
+		b';' => [0, 6, 6, 0, 6, 4, 8], b'\'' => [6, 6, 4, 0, 0, 0, 0],
+		b'`' => [12, 6, 0, 0, 0, 0, 0], b'\\' => [16, 8, 4, 2, 1, 0, 0],
+		b',' => [0, 0, 0, 0, 0, 6, 4], b'/' => [1, 2, 4, 8, 16, 0, 0],
+		b'+' => [0, 4, 4, 31, 4, 4, 0], b'*' => [0, 21, 14, 31, 14, 21, 0],
+		b' ' => [0, 0, 0, 0, 0, 0, 0],
 		_ => [0, 0, 0, 0, 0, 0, 0],
 	}
 }
@@ -140,13 +174,18 @@ pub fn touch(code: u8) {
 	drop(held_keys);
 	if scancode == 0x1C {
 		let mut command = COMMAND.lock();
-		if command.as_bytes() == b"FAINT" {
-			nicotine::faint();
-		}
+		let mut last_command = LAST_COMMAND.lock();
+		last_command.clear();
+		last_command.push_str(command.as_str()).ok();
+		*PRINTABLE.lock() = nicotine::execute(command.as_str());
 		command.clear();
+		unsafe {
+			CURSOR_LINE += 1;
+		}
 		blinking();
 		return;
 	}
+	PRINTABLE.lock().clear();
 
 	let key = match scancode {
 		0x02 => Some('1'),
