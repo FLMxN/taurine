@@ -1,6 +1,6 @@
 use core::arch::asm;
 
-fn blink(port: u16, value: u8) {
+fn pulse(port: u16, value: u8) {
     unsafe {
         asm!(
             "out dx, al",
@@ -12,7 +12,7 @@ fn blink(port: u16, value: u8) {
 
 pub fn wake() {
     let divisor: u32 = 1193182 / 100;
-        blink(0x43, 0x36);
-        blink(0x40, (divisor & 0xff) as u8);
-        blink(0x40, (divisor >> 8) as u8);
+        pulse(0x43, 0x36);
+        pulse(0x40, (divisor & 0xff) as u8);
+        pulse(0x40, (divisor >> 8) as u8);
 }
