@@ -49,7 +49,7 @@ fn entry(boot_info: &'static mut BootInfo) -> ! {
 	let info = framebuffer.info();
 	let mut screen = FrameBufferWriter::new(framebuffer.into_buffer(), info);
 	screen.clear(BODY);
-	screen.write_text(32, 32, b"taurine v0.1.0 kernel by mephisto", [46, 247, 130]);
+	screen.write_text(32, 32, b"taurine v0.2 kernel by mephisto", [46, 247, 130]);
 	
 	noradrenaline::brace();
 
