@@ -13,7 +13,9 @@ pub fn snapshot() -> String<32> {
 	interrupts::without_interrupts(|| {
 		let command = COMMAND.lock();
 		let mut snapshot = String::new();
+		snapshot.push_str("% ").ok();
 		snapshot.push_str(command.as_str()).ok();
+		snapshot.push_str("_").ok();
 		snapshot
 	})
 }
@@ -119,6 +121,7 @@ fn articulate(byte: u8) -> [u8; 7] {
 		b'6' => [14, 16, 16, 30, 17, 17, 14], b'7' => [31, 1, 2, 4, 8, 8, 8],
 		b'8' => [14, 17, 17, 14, 17, 17, 14], b'9' => [14, 17, 17, 15, 1, 1, 14],
 		b'.' => [0, 0, 0, 0, 0, 6, 6], b':' => [0, 6, 6, 0, 6, 6, 0],
+		b'%' => [24, 25, 2, 4, 8, 19, 3], b'_' => [0, 0, 0, 0, 0, 0, 31],
 		_ => [0, 0, 0, 0, 0, 0, 0],
 	}
 }
