@@ -3,7 +3,6 @@
 #![feature(abi_x86_interrupt)]
 
 mod glucose;
-mod adrenaline;
 mod noradrenaline;
 mod dopamine;
 mod nicotine;
@@ -15,7 +14,7 @@ use crate::dopamine::PRINTABLE;
 
 // use core::arch::asm;
 use core::panic::PanicInfo;
-use heapless::format;
+use heapless::{format, String};
 use core::sync::atomic::{AtomicBool, Ordering};
 use bootloader_api::{
     BootInfo, entry_point,
@@ -26,8 +25,8 @@ const VERSION: &str = const_env::env_lit!("VERSION", "0.0.0");
 // const MODE: &str = const_env::env_lit!("MODE", "unknown");
 
 static BODY: [u8; 3] = [225, 250, 245];
-pub static mut LIFETIME: u64 = 0;
 static BLINKING: AtomicBool = AtomicBool::new(false);
+pub static mut LIFETIME: u64 = 0;
 pub static mut CURSOR_LINE: usize = 1;
 pub static mut BOOTINFO: Option<&'static mut BootInfo> = None;
 const BOOTLOADER_CONFIG: BootloaderConfig = {
@@ -39,8 +38,12 @@ const BOOTLOADER_CONFIG: BootloaderConfig = {
 entry_point!(entry, config = &BOOTLOADER_CONFIG);
 
 fn entry(boot_info: &'static mut BootInfo) -> ! {
-	adrenaline::wake();
-	serotonine::initialize();
+	let mut id = Id::new(0x12345678);
+	let mut id_str: String<64> = String::new();
+	for ch in id.next().iter() {	
+			id_str.push(*ch as char).unwrap();	
+	}
+	serotonine::welcome(id_str.as_str());
 	unsafe {
 		BOOTINFO = Some(boot_info);
 		let framebuffer = (&raw mut BOOTINFO)
@@ -56,29 +59,22 @@ fn entry(boot_info: &'static mut BootInfo) -> ! {
 	screen.clear(BODY);
 	let version_text = format!(64; "taurine v{} kernel by mephisto", VERSION).unwrap();
 	screen.write_text(32, 32, version_text.as_bytes(), [46, 247, 130]);
-	// let mode_text = format!(64; "machine mode = {}", MODE).unwrap();
-	// screen.write_text(32, 48, mode_text.as_bytes(), [46, 247, 130]);
-	
+	let id_text = format!(64; "machine id = {}", id_str).unwrap();
+	screen.write_text(32, 48, id_text.as_bytes(), [46, 247, 130]);
+
 	noradrenaline::brace();
 
-	// screen.write_text(info.width-128, 56, b"lifetime", [46, 247, 130]);
 	screen.write_text(32, 120 + 16 * CURSOR_LINE, b"% ", [46, 247, 130]);
 
 	loop {
 		serotonine::flush();
-		serotonine::poll_receive();
-		while let Some(byte) = serotonine::try_receive() {
-			dopamine::receive(byte);
+		serotonine::poll();
+		while let Some(byte) = serotonine::check() {
+			serotonine::receive(byte);
 		}
 		if eyes_shut() {
 			blink(&mut screen);
-		}
-		// if conscious != LIFETIME as i64 {
-		// 	conscious = LIFETIME as i64;
-		// 	let (digits, first_digit) = u64_to_decimal(conscious as u64);
-		// 	screen.fill([info.width-128, info.width-128 + 8 * 12], [80, 80 + 16], BODY);
-		// 	screen.write_text(info.width-128, 80, &digits[first_digit..], [46, 247, 130]);
-		// 	}
+			}
 		}
 	}
 }
@@ -107,6 +103,30 @@ pub fn chill() {
     }
 }
 
+pub struct Id {
+    state: u32,
+}
+
+impl Id {
+    pub const fn new(seed: u32) -> Self {
+        Self { state: seed }
+    }
+
+    pub fn next(&mut self) -> [u8; 3] {
+        let mut x = self.state;
+        x ^= x << 13;
+        x ^= x >> 17;
+        x ^= x << 5;
+        self.state = x;
+
+        [
+            b'A' + (x % 26) as u8,
+            b'0' + ((x / 26) % 10) as u8,
+            b'0' + ((x / 260) % 10) as u8,
+        ]
+    }
+}
+
 pub fn blinking() {
 	BLINKING.store(true, Ordering::Relaxed);
 }
@@ -120,10 +140,10 @@ pub fn blink(screen: &mut FrameBufferWriter) {
 	unsafe {
 	// screen.fill([32, (32 + 8 * 48)+16*CURSOR_LINE], [120, (120 + 16)+16*CURSOR_LINE], BODY);
 	screen.write_text(32, 120+16*CURSOR_LINE, command.0.as_bytes(), [46, 247, 130]);
-		if command.1 {CURSOR_LINE += 1;}
-		screen.write_text(32, 120+16*CURSOR_LINE, b"% ", [46, 247, 130]);
-		LAST_COMMAND.lock().clear();
-		PRINTABLE.lock().clear();
+	if command.1 {CURSOR_LINE += 1;}
+	screen.write_text(32, 120+16*CURSOR_LINE, b"% ", [46, 247, 130]);
+	LAST_COMMAND.lock().clear();
+	PRINTABLE.lock().clear();
 	}
 }
 

@@ -4,6 +4,7 @@ use bootloader_api::info::MemoryRegionKind;
 use crate::BOOTINFO;
 use crate::LIFETIME;
 use crate::u64_to_decimal;
+use crate::serotonine;
 
 pub fn execute(command: &str) -> String<32> {
     unsafe {
@@ -11,6 +12,7 @@ pub fn execute(command: &str) -> String<32> {
         "FAINT" => faint(),
         "MEMTOTAL" => memtotal(),
         "UPTIME" => uptime(),
+        "PING" => ping(),
         _ => String::new(),
         }
     }
@@ -40,6 +42,16 @@ unsafe fn memtotal() -> String<32> {
     digits[first_digit..].iter().map(|&d| d as char).collect::<String<32>>()
 }
 
+fn ping() -> String<32> {
+    serotonine::send_bytes(b"PING\n");
+    String::try_from("PONG").unwrap()
+}
+
+// fn msg(msg: &str) -> String<32> {
+//     serotonine::send_bytes(msg.as_bytes());
+//     serotonine::send_bytes(b"\n");
+//     String::try_from("SENT").unwrap()
+// }
 
 fn faint() -> ! {
     unsafe {

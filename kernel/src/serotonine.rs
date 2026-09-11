@@ -1,6 +1,13 @@
 use core::arch::asm;
-use heapless::Deque;
+use heapless::{Deque, String, format};
 use spin::Mutex;
+
+use crate::dopamine::REMOTE;
+use crate::dopamine::PRINTABLE;
+use crate::dopamine::LAST_COMMAND;
+
+use crate::CURSOR_LINE;
+use crate::blinking;
 
 const COM1: u16 = 0x3F8;
 const DATA: u16 = COM1;
@@ -27,7 +34,35 @@ unsafe fn read_port(port: u16) -> u8 {
     value
 }
 
-pub fn initialize() {
+pub fn receive(byte: u8) {
+	let mut remote = REMOTE.lock();
+    let mut matched = false;
+	if byte == b'\n' {
+        match remote.as_str() {
+        "HANDSHAKE" => {
+            matched = true;
+            *PRINTABLE.lock() = String::try_from("HANDSHAKE").unwrap();
+        },
+        "PING" => {
+            matched = true;
+            *PRINTABLE.lock() = String::try_from("PONG").unwrap();
+        },
+        &_ => ()		
+    }
+        if matched {
+        *LAST_COMMAND.lock() = String::try_from("SEROTONINE").unwrap();
+            unsafe {
+                CURSOR_LINE += 1;
+			}
+		blinking();
+            }
+		remote.clear();
+	} else if remote.push(byte as char).is_err() {
+		remote.clear();
+	}
+}
+
+pub fn welcome(_id_str: &str) {
     unsafe {
         write_port(INTERRUPT_ENABLE, 0x00);
         write_port(LINE_CONTROL, 0x80);
@@ -38,7 +73,7 @@ pub fn initialize() {
         write_port(MODEM_CONTROL, 0x0B);
         write_port(INTERRUPT_ENABLE, 0x00);
     }
-    send_bytes(b"TAURINE_UP\n");
+    send_bytes(b"HANDSHAKE\n");
 }
 
 pub fn send(byte: u8) {
@@ -68,11 +103,11 @@ pub fn flush() {
     }
 }
 
-pub fn try_receive() -> Option<u8> {
+pub fn check() -> Option<u8> {
     RECEIVED.lock().pop_front()
 }
 
-pub fn poll_receive() {
+pub fn poll() {
     unsafe {
         while read_port(LINE_STATUS) & 0x01 != 0 {
             let byte = read_port(DATA);
