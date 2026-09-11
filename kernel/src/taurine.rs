@@ -14,11 +14,14 @@ use crate::dopamine::PRINTABLE;
 
 // use core::arch::asm;
 use core::panic::PanicInfo;
+use heapless::format;
 use core::sync::atomic::{AtomicBool, Ordering};
 use bootloader_api::{
     BootInfo, entry_point,
     config::{BootloaderConfig, Mapping},
 };
+
+const VERSION: &str = const_env::env_lit!("VERSION", "0.0.0");
 
 static BODY: [u8; 3] = [225, 250, 245];
 pub static mut LIFETIME: u64 = 0;
@@ -49,7 +52,8 @@ fn entry(boot_info: &'static mut BootInfo) -> ! {
 	let info = framebuffer.info();
 	let mut screen = FrameBufferWriter::new(framebuffer.into_buffer(), info);
 	screen.clear(BODY);
-	screen.write_text(32, 32, b"taurine v0.2 kernel by mephisto", [46, 247, 130]);
+	let version_text = format!(64; "taurine v{} kernel by mephisto", VERSION).unwrap();
+	screen.write_text(32, 32, version_text.as_bytes(), [46, 247, 130]);
 	
 	noradrenaline::brace();
 
