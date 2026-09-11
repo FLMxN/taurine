@@ -2,6 +2,7 @@ use core::arch::asm;
 use heapless::String;
 use bootloader_api::info::MemoryRegionKind;
 use crate::BOOTINFO;
+use crate::LIFETIME;
 use crate::u64_to_decimal;
 
 pub fn execute(command: &str) -> String<32> {
@@ -9,9 +10,15 @@ pub fn execute(command: &str) -> String<32> {
     match command {
         "FAINT" => faint(),
         "MEMTOTAL" => memtotal(),
+        "UPTIME" => uptime(),
         _ => String::new(),
         }
     }
+}
+
+unsafe fn uptime() -> String<32> {
+    let (digits, first_digit) = u64_to_decimal(LIFETIME);
+    digits[first_digit..].iter().map(|&d| d as char).collect::<String<32>>()
 }
 
 unsafe fn memtotal() -> String<32> {

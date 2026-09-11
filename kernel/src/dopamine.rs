@@ -5,12 +5,31 @@ use x86_64::instructions::interrupts;
 
 use crate::blinking;
 use crate::nicotine;
+use crate::serotonine;
 use crate::CURSOR_LINE;
 
 static COMMAND: Mutex<String<32>> = Mutex::new(String::new());
 pub static LAST_COMMAND: Mutex<String<32>> = Mutex::new(String::new());
 static HELD_KEYS: Mutex<[bool; 128]> = Mutex::new([false; 128]);
 pub static PRINTABLE: Mutex<String<32>> = Mutex::new(String::new());
+static REMOTE: Mutex<String<16>> = Mutex::new(String::new());
+
+pub fn receive(byte: u8) {
+	let mut remote = REMOTE.lock();
+	if byte == b'\n' {
+		if remote.as_str() == "TAURINE_UP" {
+			*PRINTABLE.lock() = String::try_from("HANDSHAKE").unwrap();
+			*LAST_COMMAND.lock() = String::try_from("SEROTONINE").unwrap();
+			unsafe {
+				CURSOR_LINE += 1;
+			}
+			blinking();
+		}
+		remote.clear();
+	} else if remote.push(byte as char).is_err() {
+		remote.clear();
+	}
+}
 
 pub fn snapshot() -> (String<80>, bool) {
 	interrupts::without_interrupts(|| {
@@ -177,6 +196,8 @@ pub fn touch(code: u8) {
 		let mut last_command = LAST_COMMAND.lock();
 		last_command.clear();
 		last_command.push_str(command.as_str()).ok();
+		serotonine::send_bytes(command.as_bytes());
+		serotonine::send(b'\n');
 		*PRINTABLE.lock() = nicotine::execute(command.as_str());
 		command.clear();
 		unsafe {

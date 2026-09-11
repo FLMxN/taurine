@@ -7,6 +7,7 @@ mod adrenaline;
 mod noradrenaline;
 mod dopamine;
 mod nicotine;
+mod serotonine;
 
 use crate::dopamine::FrameBufferWriter;
 use crate::dopamine::LAST_COMMAND;
@@ -22,6 +23,7 @@ use bootloader_api::{
 };
 
 const VERSION: &str = const_env::env_lit!("VERSION", "0.0.0");
+// const MODE: &str = const_env::env_lit!("MODE", "unknown");
 
 static BODY: [u8; 3] = [225, 250, 245];
 pub static mut LIFETIME: u64 = 0;
@@ -38,7 +40,7 @@ entry_point!(entry, config = &BOOTLOADER_CONFIG);
 
 fn entry(boot_info: &'static mut BootInfo) -> ! {
 	adrenaline::wake();
-	let mut conscious = 0i64;
+	serotonine::initialize();
 	unsafe {
 		BOOTINFO = Some(boot_info);
 		let framebuffer = (&raw mut BOOTINFO)
@@ -54,35 +56,32 @@ fn entry(boot_info: &'static mut BootInfo) -> ! {
 	screen.clear(BODY);
 	let version_text = format!(64; "taurine v{} kernel by mephisto", VERSION).unwrap();
 	screen.write_text(32, 32, version_text.as_bytes(), [46, 247, 130]);
+	// let mode_text = format!(64; "machine mode = {}", MODE).unwrap();
+	// screen.write_text(32, 48, mode_text.as_bytes(), [46, 247, 130]);
 	
 	noradrenaline::brace();
 
-	screen.write_text(info.width-128, 56, b"lifetime", [46, 247, 130]);
+	// screen.write_text(info.width-128, 56, b"lifetime", [46, 247, 130]);
 	screen.write_text(32, 120 + 16 * CURSOR_LINE, b"% ", [46, 247, 130]);
 
 	loop {
+		serotonine::flush();
+		serotonine::poll_receive();
+		while let Some(byte) = serotonine::try_receive() {
+			dopamine::receive(byte);
+		}
 		if eyes_shut() {
 			blink(&mut screen);
 		}
-		if conscious != LIFETIME as i64 {
-			conscious = LIFETIME as i64;
-			let (digits, first_digit) = u64_to_decimal(conscious as u64);
-			screen.fill([info.width-128, info.width-128 + 8 * 12], [80, 80 + 16], BODY);
-			screen.write_text(info.width-128, 80, &digits[first_digit..], [46, 247, 130]);
-			}
+		// if conscious != LIFETIME as i64 {
+		// 	conscious = LIFETIME as i64;
+		// 	let (digits, first_digit) = u64_to_decimal(conscious as u64);
+		// 	screen.fill([info.width-128, info.width-128 + 8 * 12], [80, 80 + 16], BODY);
+		// 	screen.write_text(info.width-128, 80, &digits[first_digit..], [46, 247, 130]);
+		// 	}
 		}
 	}
 }
-
-
-// pub fn memtotal(boot_info: &BootInfo) -> u64 {
-// 	boot_info
-// 		.memory_regions
-// 		.iter()
-// 		.filter(|region| region.kind == MemoryRegionKind::Usable)
-// 		.map(|region| region.end - region.start)
-// 		.sum()
-// }
 
 pub fn u64_to_decimal(mut value: u64) -> ([u8; 20], usize) {
 	let mut digits = [0u8; 20];
