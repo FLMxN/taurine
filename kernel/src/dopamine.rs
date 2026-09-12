@@ -12,6 +12,7 @@ pub static LAST_COMMAND: Mutex<String<32>> = Mutex::new(String::new());
 static HELD_KEYS: Mutex<[bool; 128]> = Mutex::new([false; 128]);
 pub static PRINTABLE: Mutex<String<32>> = Mutex::new(String::new());
 pub static REMOTE: Mutex<String<16>> = Mutex::new(String::new());
+static mut EXTENDED_KEY: bool = false;
 
 pub fn snapshot() -> (String<80>, bool) {
 	interrupts::without_interrupts(|| {
@@ -162,17 +163,27 @@ fn articulate(byte: u8) -> [u8; 7] {
 }
 
 pub fn touch(code: u8) {
-	let scancode = code & 0x7F;
-	let mut held_keys = HELD_KEYS.lock();
-	if code & 0x80 != 0 {
-		held_keys[scancode as usize] = false;
-		return;
-	}
-	if held_keys[scancode as usize] {
-		return;
-	}
-	held_keys[scancode as usize] = true;
-	drop(held_keys);
+	let released = code & 0x80 != 0;
+    let scancode = code & 0x7F;
+
+    if code == 0xE0 {
+        unsafe {
+            EXTENDED_KEY = true;
+        }
+        return;
+    }
+
+    if released {
+        HELD_KEYS.lock()[scancode as usize] = false;
+        return;
+    }
+
+    let extended = unsafe {
+        let value = EXTENDED_KEY;
+        EXTENDED_KEY = false;
+        value
+    };
+
 	if scancode == 0x1C {
 		let mut command = COMMAND.lock();
 		let mut last_command = LAST_COMMAND.lock();
@@ -189,7 +200,17 @@ pub fn touch(code: u8) {
 		return;
 	}
 	PRINTABLE.lock().clear();
-
+	
+	if extended {
+		if scancode == 0x48 || scancode == 0x50 {
+			let l_command= LAST_COMMAND.lock();
+			let mut command = COMMAND.lock();
+			if command.push_str(&l_command.as_str()).is_err() {
+			command.clear();
+			command.push_str(l_command.as_str()).ok();
+		}
+	}
+	} else {
 	let key = match scancode {
 		0x02 => Some('1'),
 		0x03 => Some('2'),
@@ -262,11 +283,13 @@ pub fn touch(code: u8) {
 	let Some(key) = key else {
 		return;
 	};
+
 	let mut command = COMMAND.lock();
 	if command.push(key).is_err() {
 		command.clear();
 		command.push(key).ok();
 	}
+		}
 	blinking();
 }
 

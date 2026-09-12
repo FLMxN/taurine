@@ -138,11 +138,9 @@ fn eyes_shut() -> bool {
 pub fn blink(screen: &mut FrameBufferWriter) {
 	let command = dopamine::snapshot();
 	unsafe {
-	// screen.fill([32, (32 + 8 * 48)+16*CURSOR_LINE], [120, (120 + 16)+16*CURSOR_LINE], BODY);
 	screen.write_text(32, 120+16*CURSOR_LINE, command.0.as_bytes(), [46, 247, 130]);
 	if command.1 {CURSOR_LINE += 1;}
 	screen.write_text(32, 120+16*CURSOR_LINE, b"% ", [46, 247, 130]);
-	LAST_COMMAND.lock().clear();
 	PRINTABLE.lock().clear();
 	}
 }
