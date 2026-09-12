@@ -1,8 +1,8 @@
 # Taurine
-
+For network emulation purposes, QEMU is highly recommended.
 ## Master / Slave Startup
 
-Build the image first (via PS):
+Build the image first (or look up Releases):
 
 ```powershell
 cd spawn
