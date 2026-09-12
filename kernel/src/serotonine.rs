@@ -1,10 +1,10 @@
 use core::arch::asm;
-use heapless::{Deque, String, format};
+use heapless::{Deque, String};
 use spin::Mutex;
 
-use crate::dopamine::REMOTE;
-use crate::dopamine::PRINTABLE;
-use crate::dopamine::LAST_COMMAND;
+use crate::glutamate::REMOTE;
+use crate::glutamate::PRINTABLE;
+use crate::glutamate::LAST_COMMAND;
 
 use crate::CURSOR_LINE;
 use crate::blinking;
@@ -38,7 +38,12 @@ pub fn receive(byte: u8) {
 	let mut remote = REMOTE.lock();
     let mut matched = false;
 	if byte == b'\n' {
-        match remote.as_str() {
+    let (cmd, args) = remote
+        .as_str()
+        .split_once('=')
+        .unwrap_or((remote.as_str(), ""));
+        
+        match cmd {
         "HANDSHAKE" => {
             matched = true;
             *PRINTABLE.lock() = String::try_from("HANDSHAKE").unwrap();
@@ -47,7 +52,11 @@ pub fn receive(byte: u8) {
             matched = true;
             *PRINTABLE.lock() = String::try_from("PONG").unwrap();
         },
-        &_ => ()		
+        "MSG" => {
+            matched = true;
+            *PRINTABLE.lock() = String::try_from(args).unwrap();
+        }
+        &_ => ()
     }
         if matched {
         *LAST_COMMAND.lock() = String::try_from("SEROTONINE").unwrap();

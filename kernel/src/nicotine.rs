@@ -1,5 +1,5 @@
 use core::arch::asm;
-use heapless::String;
+use heapless::{String, format};
 use bootloader_api::info::MemoryRegionKind;
 use crate::BOOTINFO;
 use crate::LIFETIME;
@@ -7,19 +7,39 @@ use crate::u64_to_decimal;
 use crate::serotonine;
 
 pub fn execute(command: &str) -> String<32> {
+    if command.contains("=") {
+    // let mut args: [&str; 2] = ["NONE", "NONE"];
+    let (cmd, _arg) = command
+        .split_once('=')
+        .unwrap_or((command, ""));
+
+
+    unsafe {
+    match cmd {
+        "MSG" => return msg(command),
+        _ => return String::new(),
+        }
+    }
+    } else {
     unsafe {
     match command {
         "FAINT" => faint(),
-        "MEMTOTAL" => memtotal(),
-        "UPTIME" => uptime(),
-        "PING" => ping(),
-        _ => String::new(),
+        "MEMTOTAL" => return memtotal(),
+        "UPTIME" => return uptime(),
+        "PING" => return ping(),
+        _ => return String::new(),
         }
     }
 }
+}
 
+fn msg(msg: &str) -> String<32> {
+    let message = format!(64; "{}\n", msg).unwrap();
+    serotonine::send_bytes(message.as_bytes());
+    return String::try_from("SENT").unwrap()
+}
 unsafe fn uptime() -> String<32> {
-    let (digits, first_digit) = u64_to_decimal(LIFETIME);
+    let (digits, first_digit) = unsafe {u64_to_decimal(LIFETIME)};
     digits[first_digit..].iter().map(|&d| d as char).collect::<String<32>>()
 }
 

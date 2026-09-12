@@ -4,13 +4,12 @@
 
 mod glucose;
 mod noradrenaline;
-mod dopamine;
+mod glutamate;
 mod nicotine;
 mod serotonine;
 
-use crate::dopamine::FrameBufferWriter;
-use crate::dopamine::LAST_COMMAND;
-use crate::dopamine::PRINTABLE;
+use crate::glutamate::FrameBufferWriter;
+use crate::glutamate::PRINTABLE;
 
 // use core::arch::asm;
 use core::panic::PanicInfo;
@@ -136,7 +135,7 @@ fn eyes_shut() -> bool {
 }
 
 pub fn blink(screen: &mut FrameBufferWriter) {
-	let command = dopamine::snapshot();
+	let command = glutamate::snapshot();
 	unsafe {
 	screen.write_text(32, 120+16*CURSOR_LINE, command.0.as_bytes(), [46, 247, 130]);
 	if command.1 {CURSOR_LINE += 1;}
