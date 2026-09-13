@@ -3,6 +3,7 @@
 #![feature(abi_x86_interrupt)]
 
 mod glucose;
+mod dopamine;
 mod noradrenaline;
 mod glutamate;
 mod nicotine;
@@ -154,5 +155,4 @@ fn panic(_info: &PanicInfo) -> ! {
 		}
 	}
 }
-
 
