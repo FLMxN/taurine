@@ -2,6 +2,7 @@ use core::arch::asm;
 use heapless::{String, format};
 use bootloader_api::info::MemoryRegionKind;
 use crate::BOOTINFO;
+use crate::ID_STR;
 use crate::LIFETIME;
 use crate::u64_to_decimal;
 use crate::serotonine;
@@ -13,10 +14,9 @@ pub fn execute(command: &str) -> String<32> {
         .split_once('=')
         .unwrap_or((command, ""));
 
-
     unsafe {
     match cmd {
-        "MSG" => return msg(command),
+        "MSG" => return msg(_arg),
         _ => return String::new(),
         }
     }
@@ -33,10 +33,10 @@ pub fn execute(command: &str) -> String<32> {
 }
 }
 
-fn msg(msg: &str) -> String<32> {
-    let message = format!(64; "{}\n", msg).unwrap();
+fn msg(content: &str) -> String<32> {
+    let message = format!(32; "MSG={}={}\n", ID_STR.lock().as_str(), content).unwrap();
     serotonine::send_bytes(message.as_bytes());
-    return String::try_from("SENT").unwrap()
+    String::try_from("SENT").unwrap()
 }
 unsafe fn uptime() -> String<32> {
     let (digits, first_digit) = unsafe {u64_to_decimal(LIFETIME)};

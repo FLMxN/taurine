@@ -1,5 +1,5 @@
 use core::arch::asm;
-use heapless::{Deque, String};
+use heapless::{Deque, String, format};
 use spin::Mutex;
 
 use crate::glutamate::REMOTE;
@@ -7,6 +7,7 @@ use crate::glutamate::PRINTABLE;
 use crate::glutamate::LAST_COMMAND;
 
 use crate::CURSOR_LINE;
+use crate::ID_STR;
 use crate::blinking;
 
 const COM1: u16 = 0x3F8;
@@ -46,7 +47,7 @@ pub fn receive(byte: u8) {
         match cmd {
         "HANDSHAKE" => {
             matched = true;
-            *PRINTABLE.lock() = String::try_from("HANDSHAKE").unwrap();
+            *PRINTABLE.lock() = String::try_from(format!(32; "HANDSHAKE W/ {}", args).unwrap()).unwrap();
         },
         "PING" => {
             matched = true;
@@ -54,9 +55,10 @@ pub fn receive(byte: u8) {
         },
         "MSG" => {
             matched = true;
-            *PRINTABLE.lock() = String::try_from(args).unwrap();
+            let (id, message) = args.split_once('=').unwrap_or((args, ""));
+            *PRINTABLE.lock() = String::try_from(format!(32; "{} said: {}", id, message).unwrap()).unwrap();
         }
-        &_ => ()
+        _ => ()
     }
         if matched {
         *LAST_COMMAND.lock() = String::try_from("SEROTONINE").unwrap();
@@ -71,7 +73,7 @@ pub fn receive(byte: u8) {
 	}
 }
 
-pub fn welcome(_id_str: &str) {
+pub fn welcome(id_str: &str) {
     unsafe {
         write_port(INTERRUPT_ENABLE, 0x00);
         write_port(LINE_CONTROL, 0x80);
@@ -82,7 +84,8 @@ pub fn welcome(_id_str: &str) {
         write_port(MODEM_CONTROL, 0x0B);
         write_port(INTERRUPT_ENABLE, 0x00);
     }
-    send_bytes(b"HANDSHAKE\n");
+    let shake = format!(32; "HANDSHAKE={}\n", id_str).unwrap();
+    send_bytes(shake.as_bytes());
 }
 
 pub fn send(byte: u8) {

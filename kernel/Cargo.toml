@@ -12,6 +12,7 @@ bootloader_api = "0.11.17"
 const_env = "0.1.5"
 heapless = "0.9.3"
 pic8259 = "0.10"
+rdrand = "0.9.0"
 spin = "0.9"
 x86_64 = "0.15"
 

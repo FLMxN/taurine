@@ -14,6 +14,7 @@ use crate::glutamate::PRINTABLE;
 
 // use core::arch::asm;
 use core::panic::PanicInfo;
+use spin::Mutex;
 use heapless::{format, String};
 use core::sync::atomic::{AtomicBool, Ordering};
 use bootloader_api::{
@@ -28,6 +29,7 @@ static BODY: [u8; 3] = [225, 250, 245];
 static BLINKING: AtomicBool = AtomicBool::new(false);
 pub static mut LIFETIME: u64 = 0;
 pub static mut CURSOR_LINE: usize = 1;
+pub static ID_STR: Mutex<String<64>> = Mutex::new(String::new());
 pub static mut BOOTINFO: Option<&'static mut BootInfo> = None;
 const BOOTLOADER_CONFIG: BootloaderConfig = {
     let mut config = BootloaderConfig::new_default();
@@ -38,15 +40,9 @@ const BOOTLOADER_CONFIG: BootloaderConfig = {
 entry_point!(entry, config = &BOOTLOADER_CONFIG);
 
 fn entry(boot_info: &'static mut BootInfo) -> ! {
-	let mut id = Id::new(0x12345678);
-	let mut id_str: String<64> = String::new();
-	for ch in id.next().iter() {	
-			id_str.push(*ch as char).unwrap();	
-	}
-	serotonine::welcome(id_str.as_str());
 	unsafe {
-		BOOTINFO = Some(boot_info);
-		let framebuffer = (&raw mut BOOTINFO)
+	BOOTINFO = Some(boot_info);
+	let framebuffer = (&raw mut BOOTINFO)
 			.as_mut()
 			.unwrap()
 			.as_mut()
@@ -54,12 +50,28 @@ fn entry(boot_info: &'static mut BootInfo) -> ! {
 			.framebuffer
 			.take()
 			.expect("framebuffer unavailable");
+	let rsdp = (&raw mut BOOTINFO)
+			.as_mut()
+			.unwrap()
+			.as_mut()
+			.unwrap()
+			.rsdp_addr
+			.take()
+			.expect("rsdp unavailable");
+	let seed = rsdp.wrapping_add(read_tsc());
+	let mut id = Id::new(seed);
+	let mut id_str: String<64> = String::new();
+	for ch in id.next().iter() {	
+			id_str.push(*ch as char).unwrap();	
+	}
+	*ID_STR.lock() = id_str.clone();
+	serotonine::welcome(ID_STR.lock().as_str());
 	let info = framebuffer.info();
 	let mut screen = FrameBufferWriter::new(framebuffer.into_buffer(), info);
 	screen.clear(BODY);
 	let version_text = format!(64; "taurine v{} kernel by mephisto", VERSION).unwrap();
 	screen.write_text(32, 32, version_text.as_bytes(), [46, 247, 130]);
-	let id_text = format!(64; "machine id = {}", id_str).unwrap();
+	let id_text = format!(64; "machine id = {}", ID_STR.lock().as_str()).unwrap();
 	screen.write_text(32, 48, id_text.as_bytes(), [46, 247, 130]);
 
 	noradrenaline::brace();
@@ -103,12 +115,25 @@ pub fn chill() {
     }
 }
 
+pub fn read_tsc() -> u64 {
+	let low: u32;
+	let high: u32;
+	unsafe {
+		core::arch::asm!(
+			"rdtsc",
+			out("eax") low,
+			out("edx") high,
+		);
+	}
+	((high as u64) << 32) | (low as u64)
+}
+
 pub struct Id {
-    state: u32,
+    state: u64,
 }
 
 impl Id {
-    pub const fn new(seed: u32) -> Self {
+    pub const fn new(seed: u64) -> Self {
         Self { state: seed }
     }
 
