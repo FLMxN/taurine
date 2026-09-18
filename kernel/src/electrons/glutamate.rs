@@ -4,7 +4,7 @@ use spin::Mutex;
 use x86_64::instructions::interrupts;
 
 use crate::blinking;
-use crate::nicotine;
+use crate::electrons::nicotine;
 use crate::CURSOR_LINE;
 
 static COMMAND: Mutex<String<32>> = Mutex::new(String::new());
@@ -194,7 +194,7 @@ pub fn touch(code: u8) {
 		last_command.push_str(command.as_str()).ok();
 		// serotonine::send_bytes(command.as_bytes());
 		// serotonine::send(b'\n');
-		*PRINTABLE.lock() = nicotine::execute(command.as_str());
+		*PRINTABLE.lock() = unsafe { nicotine::execute(command.as_str()) };
 		command.clear();
 		unsafe {
 			CURSOR_LINE += 1;

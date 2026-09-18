@@ -8,7 +8,7 @@ use pic8259::ChainedPics;
 use spin::Mutex;
 
 use crate::chill;
-use crate::glutamate::touch;
+use crate::electrons::glutamate::touch;
 
 const PIC_1_OFFSET: u8 = 32;
 const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;

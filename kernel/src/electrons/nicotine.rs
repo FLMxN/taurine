@@ -5,23 +5,19 @@ use crate::BOOTINFO;
 use crate::ID_STR;
 use crate::LIFETIME;
 use crate::u64_to_decimal;
-use crate::serotonine;
+use crate::electrons::serotonine;
 
-pub fn execute(command: &str) -> String<32> {
+pub unsafe fn execute(command: &str) -> String<32> {
     if command.contains("=") {
     // let mut args: [&str; 2] = ["NONE", "NONE"];
-    let (cmd, _arg) = command
+    let (cmd, arg) = command
         .split_once('=')
         .unwrap_or((command, ""));
-
-    unsafe {
     match cmd {
-        "MSG" => return msg(_arg),
+        "MSG" => return msg(arg),
         _ => return String::new(),
         }
-    }
     } else {
-    unsafe {
     match command {
         "FAINT" => faint(),
         "MEMTOTAL" => return memtotal(),
@@ -31,7 +27,7 @@ pub fn execute(command: &str) -> String<32> {
         }
     }
 }
-}
+
 
 fn msg(content: &str) -> String<32> {
     let message = format!(32; "MSG={}={}\n", ID_STR.lock().as_str(), content).unwrap();

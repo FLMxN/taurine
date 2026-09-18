@@ -2,12 +2,11 @@ use core::arch::asm;
 use heapless::{Deque, String, format};
 use spin::Mutex;
 
-use crate::glutamate::REMOTE;
-use crate::glutamate::PRINTABLE;
-use crate::glutamate::LAST_COMMAND;
+use crate::electrons::glutamate::REMOTE;
+use crate::electrons::glutamate::PRINTABLE;
+use crate::electrons::glutamate::LAST_COMMAND;
 
 use crate::CURSOR_LINE;
-use crate::ID_STR;
 use crate::blinking;
 
 const COM1: u16 = 0x3F8;
@@ -62,7 +61,7 @@ pub fn receive(byte: u8) {
     }
         if matched {
         *LAST_COMMAND.lock() = String::try_from("SEROTONINE").unwrap();
-            unsafe {
+			unsafe {
                 CURSOR_LINE += 1;
 			}
 		blinking();

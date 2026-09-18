@@ -2,15 +2,11 @@
 #![no_main]
 #![feature(abi_x86_interrupt)]
 
-mod glucose;
-mod dopamine;
-mod noradrenaline;
-mod glutamate;
-mod nicotine;
-mod serotonine;
+mod electrons;
+mod nucleus;
 
-use crate::glutamate::FrameBufferWriter;
-use crate::glutamate::PRINTABLE;
+use crate::electrons::glutamate::FrameBufferWriter;
+use crate::electrons::glutamate::PRINTABLE;
 
 // use core::arch::asm;
 use core::panic::PanicInfo;
@@ -65,7 +61,7 @@ fn entry(boot_info: &'static mut BootInfo) -> ! {
 			id_str.push(*ch as char).unwrap();	
 	}
 	*ID_STR.lock() = id_str.clone();
-	serotonine::welcome(ID_STR.lock().as_str());
+	electrons::serotonine::welcome(ID_STR.lock().as_str());
 	let info = framebuffer.info();
 	let mut screen = FrameBufferWriter::new(framebuffer.into_buffer(), info);
 	screen.clear(BODY);
@@ -74,15 +70,15 @@ fn entry(boot_info: &'static mut BootInfo) -> ! {
 	let id_text = format!(64; "machine id = {}", ID_STR.lock().as_str()).unwrap();
 	screen.write_text(32, 48, id_text.as_bytes(), [46, 247, 130]);
 
-	noradrenaline::brace();
+	nucleus::noradrenaline::brace();
 
 	screen.write_text(32, 120 + 16 * CURSOR_LINE, b"% ", [46, 247, 130]);
 
 	loop {
-		serotonine::flush();
-		serotonine::poll();
-		while let Some(byte) = serotonine::check() {
-			serotonine::receive(byte);
+		electrons::serotonine::flush();
+		electrons::serotonine::poll();
+		while let Some(byte) = electrons::serotonine::check() {
+			electrons::serotonine::receive(byte);
 		}
 		if eyes_shut() {
 			blink(&mut screen);
@@ -161,7 +157,8 @@ fn eyes_shut() -> bool {
 }
 
 pub fn blink(screen: &mut FrameBufferWriter) {
-	let command = glutamate::snapshot();
+	let command = electrons::glutamate::snapshot();
+
 	unsafe {
 	screen.write_text(32, 120+16*CURSOR_LINE, command.0.as_bytes(), [46, 247, 130]);
 	if command.1 {CURSOR_LINE += 1;}
