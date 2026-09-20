@@ -5,6 +5,7 @@
 mod electrons;
 mod nucleus;
 
+use crate::electrons::dopamine::FATBuffer;
 use crate::electrons::glutamate::FrameBufferWriter;
 use crate::electrons::glutamate::PRINTABLE;
 
@@ -17,21 +18,28 @@ use bootloader_api::{
     BootInfo, entry_point,
     config::{BootloaderConfig, Mapping},
 };
+use core3::io::{Cursor};
+use fatfs::{FileSystem, FormatVolumeOptions, FsOptions, ReadWriteSeek};
 
-const VERSION: &str = const_env::env_lit!("VERSION", "0.0.0");
-// const MODE: &str = const_env::env_lit!("MODE", "unknown");
+type FAT12 = FileSystem<FATBuffer<'static>>;
 
-static BODY: [u8; 3] = [225, 250, 245];
-static BLINKING: AtomicBool = AtomicBool::new(false);
-pub static mut LIFETIME: u64 = 0;
-pub static mut CURSOR_LINE: usize = 1;
-pub static ID_STR: Mutex<String<64>> = Mutex::new(String::new());
-pub static mut BOOTINFO: Option<&'static mut BootInfo> = None;
 const BOOTLOADER_CONFIG: BootloaderConfig = {
     let mut config = BootloaderConfig::new_default();
     config.mappings.physical_memory = Some(Mapping::Dynamic);
     config
 };
+const VERSION: &str = const_env::env_lit!("VERSION", "0.0.0");
+
+static BODY: [u8; 3] = [225, 250, 245];
+static BLINKING: AtomicBool = AtomicBool::new(false);
+
+static mut RAM_VOLUME: [u8; 512 * 1024] = [0; 512 * 1024];
+pub static mut LIFETIME: u64 = 0;
+pub static mut CURSOR_LINE: usize = 1;
+pub static mut BOOTINFO: Option<&'static mut BootInfo> = None;
+pub static FILESYSTEM: Mutex<Option<FAT12>> = Mutex::new(None);
+pub static ID_STR: Mutex<String<64>> = Mutex::new(String::new());
+
 
 entry_point!(entry, config = &BOOTLOADER_CONFIG);
 
@@ -54,6 +62,18 @@ fn entry(boot_info: &'static mut BootInfo) -> ! {
 			.rsdp_addr
 			.take()
 			.expect("rsdp unavailable");
+	
+	let volume = &mut *(&raw mut RAM_VOLUME);
+	let buffer = FATBuffer(Cursor::new(&mut volume[..]));
+	let fs = acknowledge(buffer).unwrap();
+	*FILESYSTEM.lock() = Some(fs);
+	{	let fileguard = FILESYSTEM.lock();
+		let root = fileguard.as_ref().unwrap().root_dir();
+		let _ = root.create_dir("LOGS");
+		let _ = electrons::dopamine::internalize(fileguard.as_ref().unwrap(), "LOGS/BOOTLOG.LOG",
+		&u64_to_bytes(read_tsc()).0[u64_to_bytes(read_tsc()).1..]);
+	}
+
 	let seed = rsdp.wrapping_add(read_tsc());
 	let mut id = Id::new(seed);
 	let mut id_str: String<64> = String::new();
@@ -62,6 +82,7 @@ fn entry(boot_info: &'static mut BootInfo) -> ! {
 	}
 	*ID_STR.lock() = id_str.clone();
 	electrons::serotonine::welcome(ID_STR.lock().as_str());
+
 	let info = framebuffer.info();
 	let mut screen = FrameBufferWriter::new(framebuffer.into_buffer(), info);
 	screen.clear(BODY);
@@ -87,7 +108,7 @@ fn entry(boot_info: &'static mut BootInfo) -> ! {
 	}
 }
 
-pub fn u64_to_decimal(mut value: u64) -> ([u8; 20], usize) {
+pub fn u64_to_bytes(mut value: u64) -> ([u8; 20], usize) {
 	let mut digits = [0u8; 20];
 	let mut first_digit = digits.len();
 
@@ -165,6 +186,19 @@ pub fn blink(screen: &mut FrameBufferWriter) {
 	screen.write_text(32, 120+16*CURSOR_LINE, b"% ", [46, 247, 130]);
 	PRINTABLE.lock().clear();
 	}
+}
+
+fn acknowledge<IO>(mut device: IO) -> Result<FileSystem<IO>, fatfs::Error<IO::Error>>
+where
+    IO: ReadWriteSeek,
+{
+    let format_options = FormatVolumeOptions::new()
+        .total_sectors(1024)
+        .volume_label(*b"TAURINE    ");   
+    fatfs::format_volume(&mut device, format_options)?;
+    
+    let fs = FileSystem::new(device, FsOptions::new())?;
+    Ok(fs)
 }
 
 #[panic_handler]

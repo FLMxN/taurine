@@ -53,3 +53,21 @@ pub unsafe extern "C" fn memcmp(
 
     0
 }
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn memchr(
+    s: *const c_void,
+    c: i32,
+    n: usize,
+) -> *mut c_void {
+    let s = s as *const u8;
+    let c = c as u8;
+
+    for i in 0..n {
+        if unsafe { s.add(i).read() } == c {
+            return unsafe { s.add(i) as *mut c_void };
+        }
+    }
+
+    core::ptr::null_mut()
+}

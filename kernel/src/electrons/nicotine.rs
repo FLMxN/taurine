@@ -4,21 +4,24 @@ use bootloader_api::info::MemoryRegionKind;
 use crate::BOOTINFO;
 use crate::ID_STR;
 use crate::LIFETIME;
-use crate::u64_to_decimal;
+use crate::{u64_to_bytes, FILESYSTEM};
 use crate::electrons::serotonine;
+use crate::electrons::dopamine;
 
-pub unsafe fn execute(command: &str) -> String<32> {
-    if command.contains("=") {
+pub unsafe fn execute(prompt: &str) -> String<32> {
+    if prompt.contains("=") {
     // let mut args: [&str; 2] = ["NONE", "NONE"];
-    let (cmd, arg) = command
+    let (function, argument) = prompt
         .split_once('=')
-        .unwrap_or((command, ""));
-    match cmd {
-        "MSG" => return msg(arg),
+        .unwrap_or((prompt, ""));
+    match function {
+        "MSG" => return msg(argument),
+        "WRITE" => return write(argument),
+        "READ" => return read(argument),
         _ => return String::new(),
         }
     } else {
-    match command {
+    match prompt {
         "FAINT" => faint(),
         "MEMTOTAL" => return memtotal(),
         "UPTIME" => return uptime(),
@@ -28,6 +31,33 @@ pub unsafe fn execute(command: &str) -> String<32> {
     }
 }
 
+unsafe fn write(args: &str) -> String<32> {
+    let fileguard = FILESYSTEM.lock();
+    if let Some((path, content)) = args.split_once(' ') {
+    if let Some(fs) = fileguard.as_ref() {
+        return match dopamine::internalize(fs, path, content.as_bytes()) {
+            Ok(()) => String::try_from("DONE").unwrap(),
+            Err(_) => String::try_from("FAILED").unwrap(),
+        };
+    }
+}
+
+    String::try_from("FAILED").unwrap()
+}
+
+fn read(args: &str) -> String<32> {
+    let mut output = [0u8; 128];
+    let fileguard = FILESYSTEM.lock();
+
+    if let Some(fs) = fileguard.as_ref() {
+        if let Ok(size) = dopamine::recall(fs, args, &mut output) {
+            let content = core::str::from_utf8(&output[..size]).unwrap_or("");
+            return String::try_from(content).unwrap_or_else(|_| String::try_from("FAILED").unwrap());
+        }
+    }
+
+    String::try_from("FAILED").unwrap()
+}
 
 fn msg(content: &str) -> String<32> {
     let message = format!(32; "MSG={}={}\n", ID_STR.lock().as_str(), content).unwrap();
@@ -35,7 +65,7 @@ fn msg(content: &str) -> String<32> {
     String::try_from("SENT").unwrap()
 }
 unsafe fn uptime() -> String<32> {
-    let (digits, first_digit) = unsafe {u64_to_decimal(LIFETIME)};
+    let (digits, first_digit) = unsafe {u64_to_bytes(LIFETIME)};
     digits[first_digit..].iter().map(|&d| d as char).collect::<String<32>>()
 }
 
@@ -54,7 +84,7 @@ unsafe fn memtotal() -> String<32> {
 		.map(|region| region.end - region.start)
 		.sum();
 
-    let (digits, first_digit) = u64_to_decimal(usable_memory);
+    let (digits, first_digit) = u64_to_bytes(usable_memory);
     digits[first_digit..].iter().map(|&d| d as char).collect::<String<32>>()
 }
 
@@ -62,12 +92,6 @@ fn ping() -> String<32> {
     serotonine::send_bytes(b"PING\n");
     String::try_from("PONG").unwrap()
 }
-
-// fn msg(msg: &str) -> String<32> {
-//     serotonine::send_bytes(msg.as_bytes());
-//     serotonine::send_bytes(b"\n");
-//     String::try_from("SENT").unwrap()
-// }
 
 fn faint() -> ! {
     unsafe {
