@@ -1,16 +1,24 @@
-# Taurine
+# Taurine § <br />Experimental operating system kernel written from scratch in Rust for heterogenous distributed computation
 
-Taurine is a minimal experimental operating system kernel written from scratch in Rust.
+## Introduction
+**Taurine** is an open-source minimal experimental operating system kernel written from scratch in Rust.
 
-The project is built around a simple idea: Taurine is the low-level foundation for **Molecule** — a distributed computing system intended to connect heterogeneous machines and use them as a shared pool of computational resources.
+The project is built around a simple idea: **Taurine** is the low-level foundation for **Molecule** — a distributed computing system intended to connect heterogeneous machines and use them as a shared pool of computational resources.
 
-## Vision
+> [!IMPORTANT]
+> **Taurine** is NOT tested and NOT recommended to boot on bare-metal devices (outside of VMs). But in case you do, feel free to tell us!
 
-Molecule is intended to connect old and heterogeneous computers, potentially across different CPU architectures, and let them cooperate on computation.
+### License
+
+GNU Public License v3.0
+
+### Vision
+
+**Molecule** is intended to connect old and heterogeneous computers, potentially across different CPU architectures, and let them cooperate on computation.
 
 The first principle is deliberately simple:
 
-> two Taurine nodes should be able to exchange arbitrary data at a very low level.
+> two **Taurine** nodes should be able to exchange arbitrary data at a very low level.
 
 From there, higher-level distributed functionality can be built incrementally:
 
@@ -34,7 +42,7 @@ From there, higher-level distributed functionality can be built incrementally:
    └─────────────┘           └─────────────┘
 ```
 
-The implementation intentionally grows from the lowest useful primitive rather than attempting to reproduce a conventional desktop operating system immediately.
+The implementation intentionally grows from the lowest useful primitive rather than attempting to reproduce a conventional desktop operating system.
 
 ## Current state
 
@@ -52,15 +60,15 @@ Taurine currently has:
 - low-level serial communication experiments
 - QEMU master/slave node emulation
 
-The kernel is currently **kernel-space only**. The shell is a diagnostic/interaction interface, not a userspace shell.
+The kernel is currently **kernel-space only**. The shell is a diagnostic/interaction interface, <ins>not</ins> a userspace shell.
 
 Filesystem and persistent storage are the next major subsystem.
 
-## Communication
+## Startup
 
-QEMU can be used to emulate two Taurine nodes connected through a serial TCP endpoint.
+QEMU can be used to emulate two Taurine nodes connected through a serial TCP endpoint. For example, on Windows host:
 
-Start the **master** first:
+Wake the **master** first:
 
 ```powershell
 qemu-system-x86_64.exe `
@@ -68,7 +76,7 @@ qemu-system-x86_64.exe `
   -serial tcp:127.0.0.1:4555,server=on,wait=off
 ```
 
-Then start the **slave**:
+Then wake the **slave**:
 
 ```powershell
 qemu-system-x86_64.exe `
@@ -76,9 +84,14 @@ qemu-system-x86_64.exe `
   -serial tcp:127.0.0.1:4555
 ```
 
+![Sequential boot](media/boot.gif)
+
 Both instances use the same kernel image. Their role is determined by the QEMU serial connection mode.
 
-This setup is primarily a development/emulation environment. A real UART connection provides bidirectional serial communication; other physical transports can be added later.
+QEMU keyword arguments and host OS choice is up to user/tester/developer.
+
+> [!NOTE]
+> This setup is primarily a development/emulation environment. A real UART connection provides bidirectional serial communication; other physical transports will be added later.
 
 ## Architecture
 
@@ -111,26 +124,27 @@ The roadmap is capability-driven rather than a strict conventional OS-developmen
 - [x] keyboard input
 - [x] interactive shell
 - [x] command arguments
-- [x] initial node-to-node communication
-- [ ] block device abstraction
-- [ ] persistent storage
-- [ ] filesystem
+- [x] in-memory filesystem
+- [ ] block device filesystem
 - [ ] executable loading
 - [ ] processes/tasks
 - [ ] memory management
 - [ ] userspace
 
+![Interactive shell](media/shell.gif)
+
 ### Molecule
 
 - [x] exchange data between kernel instances in QEMU
-- [ ] bidirectional transport abstraction
-- [ ] node discovery / handshake
+- [x] node discovery / handshake
+- [x] bidirectional transport abstraction
 - [ ] framing and message protocol
-- [ ] physical node-to-node communication
 - [ ] heterogeneous architecture support
 - [ ] distributed task execution
 - [ ] resource discovery
 - [ ] distributed ML workloads
+
+![Basic data exchange between nodes](media/msg.gif)
 
 The exact order may change as the kernel evolves.
 
@@ -146,7 +160,8 @@ The objective is to understand and control the entire stack — from boot and in
 
 ## Building
 
-The kernel is built with Rust nightly.
+> [!IMPORTANT]
+> The kernel is built with **nightly** Rust and Cargo.
 
 The project contains separate `kernel` and `spawn` components. The `spawn` component produces the bootable image used during development.
 
@@ -157,9 +172,5 @@ cd spawn
 cargo build
 cd ..
 ```
-
-QEMU is recommended for development and multi-node experiments.
-
-## License
-
-See the repository for the current license and project files.
+Emulate the image according to [explanation above.](#startup)
+QEMU is highly recommended for development and testing.
