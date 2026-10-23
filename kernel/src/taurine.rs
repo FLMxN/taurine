@@ -10,6 +10,7 @@ use crate::electrons::glutamate::FrameBufferWriter;
 use crate::electrons::glutamate::PRINTABLE;
 
 // use core::arch::asm;
+use core::fmt::Write;
 use core::panic::PanicInfo;
 use spin::Mutex;
 use heapless::{format, String};
@@ -32,6 +33,7 @@ const VERSION: &str = const_env::env_lit!("VERSION", "0.0.0");
 
 static BODY: [u8; 3] = [225, 250, 245];
 static BLINKING: AtomicBool = AtomicBool::new(false);
+static PANICKING: AtomicBool = AtomicBool::new(false);
 
 static mut RAM_VOLUME: [u8; 512 * 1024] = [0; 512 * 1024];
 pub static mut LIFETIME: u64 = 0;
@@ -40,6 +42,31 @@ pub static mut BOOTINFO: Option<&'static mut BootInfo> = None;
 pub static FILESYSTEM: Mutex<Option<FAT12>> = Mutex::new(None);
 pub static ID_STR: Mutex<String<64>> = Mutex::new(String::new());
 
+struct PanicSerial;
+
+impl Write for PanicSerial {
+	fn write_str(&mut self, text: &str) -> core::fmt::Result {
+		for byte in text.bytes() {
+			while panic_in(0x3FD) & 0x20 == 0 {}
+			panic_out(0x3F8, byte);
+		}
+		Ok(())
+	}
+}
+
+fn panic_out(port: u16, value: u8) {
+	unsafe {
+		core::arch::asm!("out dx, al", in("dx") port, in("al") value, options(nomem, nostack));
+	}
+}
+
+fn panic_in(port: u16) -> u8 {
+	let value: u8;
+	unsafe {
+		core::arch::asm!("in al, dx", in("dx") port, out("al") value, options(nomem, nostack));
+	}
+	value
+}
 
 entry_point!(entry, config = &BOOTLOADER_CONFIG);
 
@@ -202,12 +229,26 @@ where
 }
 
 #[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
-	// screen.clear([0, 0, 0]);
-	// screen.write_text(32, 32, b"kernel panic! halting...", [46, 247, 130]);
+fn panic(info: &PanicInfo) -> ! {
+	unsafe {
+		core::arch::asm!("cli", options(nomem, nostack));
+	}
+
+	if !PANICKING.swap(true, Ordering::Relaxed) {
+		panic_out(0x3F9, 0x00);
+		panic_out(0x3FB, 0x80);
+		panic_out(0x3F8, 0x01);
+		panic_out(0x3F9, 0x00);
+		panic_out(0x3FB, 0x03);
+		panic_out(0x3FA, 0xC7);
+		panic_out(0x3FC, 0x0B);
+
+		let _ = writeln!(PanicSerial, "\r\nKERNEL PANIC: {info}");
+	}
+
 	loop {
 		unsafe {
-			core::arch::asm!("hlt");
+			core::arch::asm!("hlt", options(nomem, nostack));
 		}
 	}
 }

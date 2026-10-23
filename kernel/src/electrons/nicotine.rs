@@ -18,6 +18,7 @@ pub unsafe fn execute(prompt: &str) -> String<32> {
         "MSG" => return msg(argument),
         "WRITE" => return write(argument),
         "READ" => return read(argument),
+        "POKE" => return poke(argument),
         _ => return String::new(),
         }
     } else {
@@ -57,6 +58,37 @@ fn read(args: &str) -> String<32> {
     }
 
     String::try_from("FAILED").unwrap()
+}
+
+fn poke(args: &str) -> String<32> {
+    let Some((address, value)) = args.split_once(' ') else {
+        return String::try_from("FAILED").unwrap();
+    };
+    let (Some(address), Some(value)) = (parse_integer(address), parse_integer(value)) else {
+        return String::try_from("FAILED").unwrap();
+    };
+    if address % core::mem::align_of::<u64>() as u64 != 0 {
+        return String::try_from("FAILED").unwrap();
+    }
+
+    unsafe {
+        asm!(
+            "mov qword ptr [{address}], {value}",
+            address = in(reg) address,
+            value = in(reg) value,
+            options(nostack),
+        );
+    }
+    String::try_from("DONE").unwrap()
+}
+
+fn parse_integer(input: &str) -> Option<u64> {
+    let input = input.trim();
+    if let Some(hex) = input.strip_prefix("0x").or_else(|| input.strip_prefix("0X")) {
+        u64::from_str_radix(hex, 16).ok()
+    } else {
+        input.parse().ok()
+    }
 }
 
 fn msg(content: &str) -> String<32> {
