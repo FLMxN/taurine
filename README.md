@@ -17,8 +17,11 @@ Experimental operating-system kernel written from scratch in Rust for heterogene
 
 </div>
 
+> [!NOTE]
+> Development of this software is **moderately** AI-assisted and no one in the observable universe pretends it is not.
+
 > [!WARNING]
-> Taurine is experimental kernel software, not a general-purpose operating system or a production runtime. It is **NOT tested** and **NOT recommended** to boot on bare-metal devices outside of VMs. If you do, feel free to tell us what happened.
+> Taurine is experimental kernel software, not a general-purpose operating system or a production runtime. It is **NOT tested** and **NOT recommended** to boot on bare-metal devices outside of VMs. But if you do, feel free to tell us whatever happened.
 
 ## Table of contents
 
@@ -202,6 +205,21 @@ Both instances use the same kernel image. Their role is determined by the QEMU s
 > [!NOTE]
 > This setup is primarily a development/emulation environment. A real UART connection provides bidirectional serial communication; other physical transports will be added later.
 
+### ATA/ext2 smoke test
+
+At boot, Taurine probes the ATA primary master and reads its ext2 superblock. To test with a separate ext2 image, attach that image as the primary master and move the boot image to the secondary IDE channel:
+
+```powershell
+qemu-system-x86_64.exe `
+  -drive if=none,id=data,file=.\ext2.img,format=raw `
+  -device ide-hd,drive=data,bus=ide.0,unit=0,bootindex=2 `
+  -drive if=none,id=boot,file=.\taurine.img,format=raw `
+  -device ide-hd,drive=boot,bus=ide.1,unit=0,bootindex=1 `
+  -boot order=c
+```
+
+Prepare `ext2.img` with an ext2 filesystem before booting. Do not use `taurine.img` as the data image: it contains the bootloader and is deliberately kept separate.
+
 ## Current state
 
 Taurine currently has:
@@ -218,9 +236,10 @@ Taurine currently has:
 | Small interactive shell | ✅ |
 | Command argument parsing | ✅ |
 | In-memory filesystem | ✅ |
+| ATA PIO block-device driver (primary master) | 🟡 |
+| ext2 filesystem support | ❌ |
 | Low-level serial communication experiments | ✅ |
 | QEMU master/slave node emulation | ✅ |
-| Block device filesystem | ❌ |
 | Executable loading | ❌ |
 | Processes/tasks | ❌ |
 | Memory management | ❌ |

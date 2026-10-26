@@ -1,7 +1,119 @@
-use core3::io::{Cursor, Read as CoreRead, Seek as CoreSeek, SeekFrom as CoreSeekFrom, Write as CoreWrite};
-use fatfs::{FileSystem, FormatVolumeOptions, FsOptions, IoBase, Read, ReadWriteSeek, Seek, SeekFrom, Write};
 use crate::{read_tsc, u64_to_bytes};
+use core3::io::{
+    Cursor, Read as CoreRead, Seek as CoreSeek, SeekFrom as CoreSeekFrom, Write as CoreWrite,
+};
+use fatfs::{
+    FileSystem, FormatVolumeOptions, FsOptions, IoBase, Read, ReadWriteSeek, Seek, SeekFrom, Write,
+};
 // use crate::Mutex;
+
+pub const BLOCK_SECTOR_SIZE: usize = 512;
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum BlockError {
+    NoDevice,
+    Timeout,
+    DeviceFault,
+    DeviceError(u8),
+    LbaUnsupported,
+    InvalidCapacity,
+    InvalidBufferLength,
+    TooManySectors,
+    OutOfBounds,
+}
+
+pub trait BlockDevice {
+    fn sector_count(&self) -> u32;
+    fn read_sectors(&mut self, lba: u32, buffer: &mut [u8]) -> Result<(), BlockError>;
+    fn write_sectors(&mut self, lba: u32, buffer: &[u8]) -> Result<(), BlockError>;
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Superblock {
+    pub inode_count: u32,
+    pub block_count: u32,
+    pub first_data_block: u32,
+    pub block_size: u32,
+    pub blocks_per_group: u32,
+    pub inodes_per_group: u32,
+    pub revision_level: u32,
+    pub inode_size: u16,
+    pub compatible_features: u32,
+    pub incompatible_features: u32,
+    pub read_only_features: u32,
+}
+
+#[derive(Debug)]
+pub enum Ext2Error {
+    Device(BlockError),
+    InvalidMagic(u16),
+    InvalidBlockSize(u32),
+    InvalidInodeSize(u16),
+    InvalidGeometry,
+}
+
+pub fn read_superblock<IO: BlockDevice>(device: &mut IO) -> Result<Superblock, Ext2Error> {
+    const SUPERBLOCK_SIZE: usize = 1024;
+
+    let mut raw = [0; SUPERBLOCK_SIZE];
+    device
+        .read_sectors(2, &mut raw)
+        .map_err(Ext2Error::Device)?;
+
+    let magic = u16::from_le_bytes([raw[56], raw[57]]);
+    if magic != 0xef53 {
+        return Err(Ext2Error::InvalidMagic(magic));
+    }
+
+    let log_block_size = u32_at(&raw, 24);
+    if log_block_size > 6 {
+        return Err(Ext2Error::InvalidBlockSize(log_block_size));
+    }
+    let block_size = 1024u32 << log_block_size;
+
+    let revision_level = u32_at(&raw, 76);
+    let inode_size = if revision_level == 0 {
+        128
+    } else {
+        u16::from_le_bytes([raw[88], raw[89]])
+    };
+    if inode_size < 128 || u32::from(inode_size) > block_size || !inode_size.is_power_of_two() {
+        return Err(Ext2Error::InvalidInodeSize(inode_size));
+    }
+
+    let superblock = Superblock {
+        inode_count: u32_at(&raw, 0),
+        block_count: u32_at(&raw, 4),
+        first_data_block: u32_at(&raw, 20),
+        block_size,
+        blocks_per_group: u32_at(&raw, 32),
+        inodes_per_group: u32_at(&raw, 40),
+        revision_level,
+        inode_size,
+        compatible_features: u32_at(&raw, 92),
+        incompatible_features: u32_at(&raw, 96),
+        read_only_features: u32_at(&raw, 100),
+    };
+
+    if superblock.inode_count == 0
+        || superblock.block_count <= superblock.first_data_block
+        || superblock.blocks_per_group == 0
+        || superblock.inodes_per_group == 0
+    {
+        return Err(Ext2Error::InvalidGeometry);
+    }
+
+    Ok(superblock)
+}
+
+fn u32_at(bytes: &[u8], offset: usize) -> u32 {
+    u32::from_le_bytes([
+        bytes[offset],
+        bytes[offset + 1],
+        bytes[offset + 2],
+        bytes[offset + 3],
+    ])
+}
 
 pub struct FATBuffer<'a>(pub Cursor<&'a mut [u8]>);
 
@@ -44,7 +156,6 @@ impl<'a> Seek for FATBuffer<'a> {
     }
 }
 
-
 pub fn recall<IO>(
     fs: &FileSystem<IO>,
     path: &str,
@@ -67,7 +178,6 @@ where
 
     Ok(read)
 }
-
 
 pub fn internalize<IO>(
     fs: &FileSystem<IO>,

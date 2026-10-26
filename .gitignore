@@ -1,7 +1,7 @@
 target/
 **/target/
 
-/taurine.img
+/*.img
 
 .vscode/
 .idea/

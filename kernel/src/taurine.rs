@@ -6,6 +6,8 @@ mod electrons;
 mod nucleus;
 
 use crate::electrons::dopamine::FATBuffer;
+use crate::electrons::anandamide::PrimaryMaster;
+use crate::electrons::dopamine::{BlockDevice, Ext2Error};
 use crate::electrons::glutamate::FrameBufferWriter;
 use crate::electrons::glutamate::PRINTABLE;
 
@@ -40,6 +42,7 @@ pub static mut LIFETIME: u64 = 0;
 pub static mut CURSOR_LINE: usize = 1;
 pub static mut BOOTINFO: Option<&'static mut BootInfo> = None;
 pub static FILESYSTEM: Mutex<Option<FAT12>> = Mutex::new(None);
+pub static BLOCK_DEVICE: Mutex<Option<PrimaryMaster>> = Mutex::new(None);
 pub static ID_STR: Mutex<String<64>> = Mutex::new(String::new());
 
 struct PanicSerial;
@@ -94,6 +97,27 @@ fn entry(boot_info: &'static mut BootInfo) -> ! {
 	let buffer = FATBuffer(Cursor::new(&mut volume[..]));
 	let fs = acknowledge(buffer).unwrap();
 	*FILESYSTEM.lock() = Some(fs);
+
+	let storage_status = match PrimaryMaster::identify() {
+		Ok(mut disk) => {
+			let status = match electrons::dopamine::read_superblock(&mut disk) {
+				Ok(superblock) => format!(
+					64;
+					"ATA {} sectors; ext2 block {}",
+					disk.sector_count(),
+					superblock.block_size
+				).unwrap(),
+				Err(Ext2Error::InvalidMagic(_)) => {
+					String::try_from("ATA ready; no ext2 filesystem").unwrap()
+				}
+				Err(_) => String::try_from("ATA ready; ext2 superblock invalid").unwrap(),
+			};
+			*BLOCK_DEVICE.lock() = Some(disk);
+			status
+		}
+		Err(_) => String::try_from("ATA primary master unavailable").unwrap(),
+	};
+
 	{	let fileguard = FILESYSTEM.lock();
 		let root = fileguard.as_ref().unwrap().root_dir();
 		let _ = root.create_dir("LOGS");
@@ -117,6 +141,7 @@ fn entry(boot_info: &'static mut BootInfo) -> ! {
 	screen.write_text(32, 32, version_text.as_bytes(), [46, 247, 130]);
 	let id_text = format!(64; "machine id = {}", ID_STR.lock().as_str()).unwrap();
 	screen.write_text(32, 48, id_text.as_bytes(), [46, 247, 130]);
+	screen.write_text(32, 64, storage_status.as_bytes(), [46, 247, 130]);
 
 	nucleus::noradrenaline::brace();
 
@@ -252,4 +277,3 @@ fn panic(info: &PanicInfo) -> ! {
 		}
 	}
 }
-
